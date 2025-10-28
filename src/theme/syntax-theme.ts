@@ -1,6 +1,5 @@
-import { PrismTheme } from 'react-syntax-highlighter';
 
-export const syntaxTheme: PrismTheme = {
+export const syntaxTheme = {
   'code[class*="language-"]': {
     color: '#e3e9f0',
     background: 'none',

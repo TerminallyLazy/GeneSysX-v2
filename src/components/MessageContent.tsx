@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
+import type { CSSProperties } from 'react';
 import { ClipboardIcon, CheckIcon, ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/24/outline';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import syntaxTheme from '../theme/syntax-theme';
 import SequenceViewer from './SequenceViewer';
 
@@ -17,6 +17,47 @@ interface MessageContentProps {
 const CodeBlock: React.FC<CodeBlockProps> = ({ code, language = 'plaintext', collapsed = false }) => {
   const [isCopied, setIsCopied] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(collapsed);
+  const [Highlighter, setHighlighter] = useState<null | React.ComponentType<Record<string, unknown>>>(null);
+
+  // Dynamically import light Prism and selected languages
+  React.useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const mod = await import('react-syntax-highlighter');
+        type PrismLightType = React.ComponentType<Record<string, unknown>> & { registerLanguage: (n: string, l: unknown) => void };
+        const anyMod = mod as unknown as { PrismLight?: PrismLightType; Prism?: PrismLightType };
+        const PrismLight: PrismLightType = (anyMod.PrismLight || anyMod.Prism)!;
+        const langs: Record<string, string> = {
+          javascript: 'javascript', typescript: 'typescript', ts: 'typescript', js: 'javascript',
+          python: 'python', py: 'python', bash: 'bash', sh: 'bash', json: 'json', yaml: 'yaml', yml: 'yaml',
+          markdown: 'markdown', md: 'markdown', html: 'markup', css: 'css'
+        };
+        const langKey = (language || 'plaintext').toLowerCase();
+        const chosen = langs[langKey];
+        const loaders: Record<string, () => Promise<unknown>> = {
+          javascript: () => import('react-syntax-highlighter/dist/esm/languages/prism/javascript'),
+          typescript: () => import('react-syntax-highlighter/dist/esm/languages/prism/typescript'),
+          python: () => import('react-syntax-highlighter/dist/esm/languages/prism/python'),
+          bash: () => import('react-syntax-highlighter/dist/esm/languages/prism/bash'),
+          json: () => import('react-syntax-highlighter/dist/esm/languages/prism/json'),
+          yaml: () => import('react-syntax-highlighter/dist/esm/languages/prism/yaml'),
+          markdown: () => import('react-syntax-highlighter/dist/esm/languages/prism/markdown'),
+          markup: () => import('react-syntax-highlighter/dist/esm/languages/prism/markup'),
+          css: () => import('react-syntax-highlighter/dist/esm/languages/prism/css'),
+        };
+        if (chosen && loaders[chosen]) {
+          const langMod = await loaders[chosen]!();
+          const grammar = (langMod as { default: unknown }).default;
+          PrismLight.registerLanguage(chosen, grammar);
+        }
+        if (mounted) setHighlighter(() => PrismLight as React.ComponentType<Record<string, unknown>>);
+      } catch {
+        // ignore, fallback to plain
+      }
+    })();
+    return () => { mounted = false; };
+  }, [language]);
 
   const handleCopy = async () => {
     try {
@@ -64,20 +105,24 @@ const CodeBlock: React.FC<CodeBlockProps> = ({ code, language = 'plaintext', col
         </button>
       </div>
       <div className="relative">
-        <SyntaxHighlighter
-          language={language}
-          style={syntaxTheme}
-          customStyle={{
-            margin: 0,
-            borderRadius: '0.5rem',
-            padding: '1rem',
-            background: '#1a1f2e',
-          }}
-          wrapLongLines={true}
-          showLineNumbers={!isCollapsed && codeLines.length > 5}
-        >
-          {displayCode}
-        </SyntaxHighlighter>
+        {Highlighter ? (
+          <Highlighter
+            language={language}
+            style={syntaxTheme as unknown as Record<string, CSSProperties>}
+            customStyle={{
+              margin: 0,
+              borderRadius: '0.5rem',
+              padding: '1rem',
+              background: '#1a1f2e',
+            }}
+            wrapLongLines={true}
+            showLineNumbers={!isCollapsed && codeLines.length > 5}
+          >
+            {displayCode}
+          </Highlighter>
+        ) : (
+          <pre className="p-4 text-sm bg-[#1a1f2e] text-slate-200 rounded" style={{ margin: 0 }}>{displayCode}</pre>
+        )}
         {isCollapsed && hasMoreLines && (
           <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-[#1a1f2e] to-transparent" />
         )}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Plus, Save, Download, Upload, Trash2 } from 'lucide-react';
 
 interface GeneticElement {

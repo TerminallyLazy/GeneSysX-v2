@@ -16,10 +16,9 @@ const Tooltip: React.FC<TooltipProps> = ({
   className = '',
 }) => {
   const [isVisible, setIsVisible] = useState(false);
-  const [coords, setCoords] = useState({ x: 0, y: 0 });
   const tooltipRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  let timeout: NodeJS.Timeout;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
 
   const positions = {
     top: 'bottom-full left-1/2 -translate-x-1/2 mb-2',
@@ -37,10 +36,6 @@ const Tooltip: React.FC<TooltipProps> = ({
 
   const handleMouseEnter = () => {
     timeout = setTimeout(() => {
-      if (containerRef.current) {
-        const rect = containerRef.current.getBoundingClientRect();
-        setCoords({ x: rect.left, y: rect.top });
-      }
       setIsVisible(true);
     }, delay);
   };

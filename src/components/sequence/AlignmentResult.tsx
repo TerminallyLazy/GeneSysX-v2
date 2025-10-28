@@ -1,4 +1,3 @@
-import React from 'react';
 import { AlignmentResult, AlignmentAlgorithm, colorMap } from './types';
 
 interface AlignmentResultProps {

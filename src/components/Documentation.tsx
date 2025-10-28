@@ -1,4 +1,3 @@
-import React from 'react';
 import { Book, FileText, Code, ExternalLink } from 'lucide-react';
 
 export default function Documentation() {

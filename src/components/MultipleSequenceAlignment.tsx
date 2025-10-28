@@ -1,11 +1,17 @@
-import React, { useState } from 'react';
-import { Upload, Download, Play, AlignLeft, Settings } from 'lucide-react';
+import { lazy, Suspense, useState } from 'react';
+import { Upload, Download, Play, AlignLeft } from 'lucide-react';
+import { clustalRun, clustalStatus, clustalResult, detectStypeFromFasta } from '../services/ebi';
 
 export default function MultipleSequenceAlignment() {
   const [sequences, setSequences] = useState('');
-  const [algorithm, setAlgorithm] = useState('clustalw');
+  const [algorithm, setAlgorithm] = useState('clustalo');
   const [gapOpenPenalty, setGapOpenPenalty] = useState(-10);
   const [gapExtendPenalty, setGapExtendPenalty] = useState(-0.5);
+  const [status, setStatus] = useState<'IDLE'|'RUNNING'|'FINISHED'|'ERROR'>('IDLE');
+  const [alignment, setAlignment] = useState<string>('');
+  const [error, setError] = useState<string | null>(null);
+  const [viewerWidth, setViewerWidth] = useState<number>(60);
+  const [showConsensus, setShowConsensus] = useState<boolean>(false);
 
   return (
     <div className="space-y-6">
@@ -21,9 +27,41 @@ export default function MultipleSequenceAlignment() {
               <Download className="h-4 w-4 mr-2" />
               Export
             </button>
-            <button className="btn-primary">
+            <button 
+              className="btn-primary disabled:opacity-50"
+              onClick={async () => {
+                setError(null);
+                setAlignment('');
+                try {
+                  if (!sequences.trim()) {
+                    setError('Please provide sequences in FASTA format');
+                    return;
+                  }
+                  setStatus('RUNNING');
+                  const stype = detectStypeFromFasta(sequences);
+                  const jid = await clustalRun({ sequence: sequences, stype });
+                  // poll
+                  let pollCount = 0;
+                  while (true) {
+                    await new Promise(r => setTimeout(r, 2000));
+                    const s = await clustalStatus(jid);
+                    if (s === 'FINISHED') break;
+                    if (s === 'ERROR' || s === 'NOT_FOUND') throw new Error(`Job ${s}`);
+                    if (pollCount++ > 60) throw new Error('Timeout waiting for alignment');
+                  }
+                  const result = await clustalResult(jid, 'aln-clustal');
+                  setAlignment(result);
+                  setStatus('FINISHED');
+                } catch (e: unknown) {
+                  console.error(e);
+                  setError(e instanceof Error ? e.message : 'Alignment failed');
+                  setStatus('ERROR');
+                }
+              }}
+              disabled={status === 'RUNNING'}
+            >
               <Play className="h-4 w-4 mr-2" />
-              Align
+              {status === 'RUNNING' ? 'Aligning…' : 'Align'}
             </button>
           </div>
         </div>
@@ -91,11 +129,65 @@ export default function MultipleSequenceAlignment() {
           <AlignLeft className="h-5 w-5 mr-2" />
           Alignment Viewer
         </h3>
-        <div className="h-96 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg overflow-auto font-mono">
-          <div className="p-4">
-            <p className="text-gray-500 dark:text-gray-400">Alignment results will appear here</p>
-          </div>
+        {error && (
+          <div className="mb-3 text-sm text-red-600 dark:text-red-300">{error}</div>
+        )}
+        <div className="h-96 border border-gray-200 dark:border-gray-600 rounded-lg overflow-auto font-mono bg-white dark:bg-gray-900">
+          {alignment ? (
+            <div className="p-2 min-w-[600px]">
+              {/* Controls */}
+              <div className="flex items-center gap-3 mb-2 text-xs">
+                <label className="flex items-center gap-1">
+                  <span>Width</span>
+                  <select
+                    value={viewerWidth}
+                    onChange={(e) => setViewerWidth(Number(e.target.value))}
+                    className="form-select py-0 px-1"
+                  >
+                    <option value={50}>50</option>
+                    <option value={60}>60</option>
+                    <option value={80}>80</option>
+                  </select>
+                </label>
+                <label className="flex items-center gap-1">
+                  <input type="checkbox" checked={showConsensus} onChange={e=>setShowConsensus(e.target.checked)} />
+                  <span>Consensus</span>
+                </label>
+              </div>
+              {/* Lazy-load MSA viewer to keep initial bundle light */}
+              <Suspense fallback={<pre className="p-4 text-sm whitespace-pre">{alignment}</pre>}>
+                {(() => {
+                  const MSAViewer = lazy(() => import('./MSAViewer'));
+                  return <MSAViewer clustal={alignment} width={viewerWidth} showConservation={true} showConsensus={showConsensus} />;
+                })()}
+              </Suspense>
+            </div>
+          ) : (
+            <div className="p-4 text-sm text-gray-500 dark:text-gray-400">Alignment results will appear here</div>
+          )}
         </div>
+        {alignment && (
+          <div className="mt-3 flex gap-2">
+            <button
+              className="btn-secondary"
+              onClick={async () => {
+                await navigator.clipboard.writeText(alignment);
+              }}
+            >Copy</button>
+            <button
+              className="btn-secondary"
+              onClick={() => {
+                const blob = new Blob([alignment], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'alignment.clustal.txt';
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+            >Download</button>
+          </div>
+        )}
       </div>
     </div>
   );
