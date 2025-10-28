@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Send, Wand2, ArrowRight } from 'lucide-react';
 
 interface Message {

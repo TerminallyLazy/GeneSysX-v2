@@ -1,11 +1,10 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Upload, Download, Play, Table, PieChart, BarChart2 } from 'lucide-react';
 
 export default function FunctionalEnrichment() {
   const [geneList, setGeneList] = useState('');
   const [database, setDatabase] = useState('GO');
   const [pValueCutoff, setPValueCutoff] = useState(0.05);
-  const [results, setResults] = useState<null | any>(null);
 
   return (
     <div className="space-y-6">

@@ -1,4 +1,3 @@
-import React from 'react';
 import { AlertCircle } from 'lucide-react';
 
 interface SequenceInputProps {
@@ -24,7 +23,7 @@ export default function SequenceInput({ sequence, onChange, label }: SequenceInp
         />
         {sequence.length > 10000 && (
           <div className="absolute right-2 top-2">
-            <AlertCircle className="h-5 w-5 text-yellow-500" title="Large sequence detected" />
+            <AlertCircle className="h-5 w-5 text-yellow-500" aria-label="Large sequence detected" />
           </div>
         )}
       </div>

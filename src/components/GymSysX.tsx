@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Play, Pause, RotateCcw, Download, ChevronRight } from 'lucide-react';
+import { useState } from 'react';
+import { Play, Download, ChevronRight } from 'lucide-react';
 
 interface Environment {
   name: string;

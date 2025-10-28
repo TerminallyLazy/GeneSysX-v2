@@ -381,7 +381,6 @@ const SequenceViewer: React.FC<SequenceViewerProps> = ({ sequence, type }) => {
 
   const displaySequence = isCollapsed ? sequence.slice(0, 100) : sequence;
   const formattedSequence = formatSequence(displaySequence);
-  const totalLength = sequence.length;
 
   const StatsPanel = () => (
     <div className={`

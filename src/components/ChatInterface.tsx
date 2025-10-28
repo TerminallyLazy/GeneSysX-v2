@@ -12,6 +12,7 @@ import {
   ExclamationCircleIcon,
   InformationCircleIcon,
   QuestionMarkCircleIcon,
+  StopIcon,
 } from '@heroicons/react/24/outline';
 import { chatService, ChatMessage } from '../services/chatService';
 import TypingIndicator from './TypingIndicator';
@@ -121,6 +122,12 @@ const ChatInterface: React.FC = () => {
   const [visibleMessages, setVisibleMessages] = useState<VisibleMessagesMap>({});
   const [currentTypingIndex, setCurrentTypingIndex] = useState(-1);
 
+  // Streaming state
+  const streamingControllerRef = useRef<AbortController | null>(null);
+  const [streamingTps, setStreamingTps] = useState(0);
+  const streamingStartRef = useRef<number | null>(null);
+  const streamingTokenCountRef = useRef<number>(0);
+
   // Animate new assistant messages
   useEffect(() => {
     const assistantMessages = messages.filter(m => m.role === 'assistant');
@@ -187,7 +194,7 @@ const ChatInterface: React.FC = () => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
         e.preventDefault();
         if (input.trim()) {
-          handleSubmit(e as any);
+          handleSubmit();
         }
       }
 
@@ -257,12 +264,61 @@ const ChatInterface: React.FC = () => {
         message: 'Message copied to clipboard',
         duration: 2000,
       });
-    } catch (err) {
+    } catch {
       showToast({
         type: 'error',
         message: 'Failed to copy message',
         duration: 3000,
       });
+    }
+  };
+
+  const handleRegenerate = async () => {
+    if (isProcessing) return;
+    const lastUser = [...messages].reverse().find(m => m.role === 'user');
+    if (!lastUser) {
+      showToast({ type: 'error', message: 'No user message to regenerate', duration: 3000 });
+      return;
+    }
+    const messageContent = lastUser.content;
+
+    const assistantId = Math.random().toString();
+    setIsProcessing(true);
+    setIsTyping(true);
+    streamingTokenCountRef.current = 0;
+    setStreamingTps(0);
+    streamingStartRef.current = Date.now();
+    const controller = new AbortController();
+    streamingControllerRef.current = controller;
+
+    // Insert placeholder assistant message
+    setMessages(prev => [
+      ...prev,
+      { id: assistantId, role: 'assistant', content: '', timestamp: new Date(), status: 'sent' }
+    ]);
+
+    try {
+      await chatService.sendMessageStream(
+        messageContent.trim(),
+        (delta) => {
+          setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: (m.content || '') + delta } : m));
+          const next = streamingTokenCountRef.current + delta.length;
+          streamingTokenCountRef.current = next;
+          const start = streamingStartRef.current ?? Date.now();
+          const dt = Math.max(0.1, (Date.now() - start) / 1000);
+          setStreamingTps(Number((next / dt).toFixed(1)));
+        },
+        { signal: controller.signal }
+      );
+      showToast({ type: 'success', message: 'Regenerated', duration: 2000 });
+    } catch {
+      setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, status: 'error' } : m));
+      showToast({ type: 'error', message: 'Regenerate failed', duration: 3000 });
+    } finally {
+      setIsProcessing(false);
+      setIsTyping(false);
+      streamingControllerRef.current = null;
+      streamingStartRef.current = null;
     }
   };
 
@@ -297,20 +353,41 @@ const ChatInterface: React.FC = () => {
         )
       );
 
-      const response = await chatService.sendMessage(messageContent.trim());
-      
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
+      // Create placeholder assistant message
+      const assistantId = Math.random().toString();
+      // Prepare streaming trackers
+      streamingTokenCountRef.current = 0;
+      setStreamingTps(0);
+      streamingStartRef.current = Date.now();
+      // Create controller to allow cancel
+      const controller = new AbortController();
+      streamingControllerRef.current = controller;
       setMessages(prev => [
         ...prev,
         {
-          id: Math.random().toString(),
+          id: assistantId,
           role: 'assistant',
-          content: response,
+          content: '',
           timestamp: new Date(),
           status: 'sent',
         },
       ]);
+
+      // Stream tokens and update assistant message content incrementally
+      await chatService.sendMessageStream(
+        messageContent.trim(),
+        (delta) => {
+          setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: (m.content || '') + delta } : m));
+          {
+            const next = streamingTokenCountRef.current + delta.length;
+            streamingTokenCountRef.current = next;
+            const start = streamingStartRef.current ?? Date.now();
+            const dt = Math.max(0.1, (Date.now() - start) / 1000);
+            setStreamingTps(Number((next / dt).toFixed(1)));
+          }
+        },
+        { signal: controller.signal }
+      );
 
       showToast({
         type: 'success',
@@ -333,6 +410,8 @@ const ChatInterface: React.FC = () => {
     } finally {
       setIsProcessing(false);
       setIsTyping(false);
+      streamingControllerRef.current = null;
+      streamingStartRef.current = null;
     }
   };
 
@@ -363,9 +442,6 @@ const ChatInterface: React.FC = () => {
     );
   };
 
-  const handleQuickAction = (prompt: string) => {
-    setInput(prompt);
-  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
@@ -451,11 +527,32 @@ const ChatInterface: React.FC = () => {
         </div>
         <div className="flex items-center gap-3">
           {isProcessing && (
-            <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-              <ArrowPathIcon className="h-3 w-3 animate-spin" />
-              Processing...
+            <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
+              <div className="flex items-center gap-2">
+                <ArrowPathIcon className="h-3 w-3 animate-spin" />
+                <span>Streaming… {streamingTps ? `${streamingTps} tok/s` : ''}</span>
+              </div>
+              <button
+                onClick={() => {
+                  streamingControllerRef.current?.abort();
+                  setIsProcessing(false);
+                  setIsTyping(false);
+                }}
+                className="px-2 py-1 rounded bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800"
+                title="Stop streaming"
+              >
+                <span className="inline-flex items-center gap-1"><StopIcon className="h-4 w-4" /> Stop</span>
+              </button>
             </div>
           )}
+          <button
+            onClick={handleRegenerate}
+            disabled={isProcessing}
+            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-600 dark:text-slate-400 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50"
+            title="Regenerate last response"
+          >
+            <ArrowPathIcon className="h-5 w-5" />
+          </button>
           <button
             onClick={() => setIsHelpModalOpen(true)}
             className="p-1.5 rounded-lg text-slate-500 hover:text-slate-600 dark:text-slate-400 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"

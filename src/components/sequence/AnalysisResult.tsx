@@ -1,4 +1,3 @@
-import React from 'react';
 
 interface AnalysisResultProps {
   result: string | null;

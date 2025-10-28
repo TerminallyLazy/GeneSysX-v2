@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Upload, Download, Play, Settings, ZoomIn, ZoomOut } from 'lucide-react';
 
 export default function PhylogeneticAnalysis() {

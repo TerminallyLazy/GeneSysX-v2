@@ -18,23 +18,6 @@ export { default as Switch } from './Switch';
 export { default as Tabs } from './Tabs';
 export { default as Tooltip } from './Tooltip';
 
-// Types
-export type { AlertProps } from './Alert';
-export type { BadgeProps } from './Badge';
-export type { ButtonProps } from './Button';
-export type { CardProps } from './Card';
-export type { DropdownProps } from './Dropdown';
-export type { InputProps } from './Input';
-export type { ModalProps } from './Modal';
-export type { ProgressProps } from './Progress';
-export type { SelectProps } from './Select';
-export type { 
-  SkeletonProps,
-  SkeletonTextGroupProps 
-} from './Skeleton';
-export type { SwitchProps } from './Switch';
-export type { TabsProps } from './Tabs';
-export type { TooltipProps } from './Tooltip';
 
 // Add keyframe animations to tailwind config
 const animations = {

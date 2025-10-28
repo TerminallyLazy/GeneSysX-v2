@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Upload, Download, Play, Box, GitGraph, Settings } from 'lucide-react';
+import { useState } from 'react';
+import { Play, Box, GitGraph, Settings } from 'lucide-react';
 
 export default function MolecularInteractions() {
   const [molecule1, setMolecule1] = useState('');
